@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="Калькулятор теста для пиццы: граммы муки, воды, дрожжей, соли, сахара и масла по диаметру, количеству и толщине.">
+    <meta name="theme-color" content="#241c16">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Тесто">
+    <title>Тесто — калькулятор теста для пиццы</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="stylesheet" href="css/app.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="wrap bar">
+        <div class="brand">
+          <svg class="logo" viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+            <rect width="48" height="48" rx="14" fill="#8e3b1b"/>
+            <circle cx="24" cy="25" r="13" fill="#f6ead6"/>
+            <circle cx="24" cy="25" r="8.6" fill="none" stroke="#d7b07a" stroke-width="1.7"/>
+          </svg>
+          <div>
+            <p class="kicker">В граммах</p>
+            <h1>Тесто</h1>
+          </div>
+        </div>
+        <button type="button" class="install no-print" id="install">Установить</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap">
+        <p class="lede">Диаметр в сантиметрах, число пицц и толщина корки. Вес каждого ингредиента — сразу в граммах.</p>
+
+        <div class="layout">
+          <section class="card settings no-print" aria-labelledby="settings-title">
+            <h2 id="settings-title">Ваша пицца</h2>
+
+            <div class="field">
+              <div class="field-head">
+                <label class="field-name" for="diameter">Диаметр</label>
+                <p class="field-value"><span id="diameter-value">30</span> <span class="unit">см</span></p>
+              </div>
+              <input id="diameter" type="range" min="25" max="51" step="1" value="30" aria-valuetext="30 сантиметров">
+              <div class="scale" aria-hidden="true"><span>25 см</span><span>51 см</span></div>
+              <p class="equiv" id="diameter-inches">11,8 дюйма</p>
+              <div class="chips" role="group" aria-label="Частые диаметры в сантиметрах">
+                <button type="button" data-cm="25" aria-pressed="false">25</button>
+                <button type="button" data-cm="30" aria-pressed="true">30</button>
+                <button type="button" data-cm="33" aria-pressed="false">33</button>
+                <button type="button" data-cm="35" aria-pressed="false">35</button>
+                <button type="button" data-cm="40" aria-pressed="false">40</button>
+                <button type="button" data-cm="45" aria-pressed="false">45</button>
+                <button type="button" data-cm="50" aria-pressed="false">50</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="field-head">
+                <label class="field-name" for="count">Количество</label>
+                <p class="field-value"><span id="count-value">4</span> <span class="unit">шт.</span></p>
+              </div>
+              <input id="count" type="range" min="1" max="12" step="1" value="4" aria-valuetext="4 пиццы">
+              <div class="scale" aria-hidden="true"><span>1</span><span>12</span></div>
+            </div>
+
+            <fieldset class="thickness-field">
+              <legend class="field-name">Толщина</legend>
+              <div class="thickness">
+                <label class="choice">
+                  <input type="radio" name="thickness" value="thin">
+                  <span>Тонкое</span>
+                </label>
+                <label class="choice">
+                  <input type="radio" name="thickness" value="regular" checked>
+                  <span>Обычное</span>
+                </label>
+                <label class="choice">
+                  <input type="radio" name="thickness" value="thick">
+                  <span>Толстое</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <label class="switch">
+              <span>
+                <span class="switch-title">Без глютена</span>
+                <span class="switch-note">Другая мука и 80% воды</span>
+              </span>
+              <input id="gluten" type="checkbox">
+              <span class="switch-ui" aria-hidden="true"></span>
+            </label>
+
+            <div class="tip">
+              <p class="tip-title" id="tip-title">Выпечка</p>
+              <p id="tip-text">Разогрейте печь на максимум. На камне или стали обычная пицца печётся 6–8 минут.</p>
+            </div>
+          </section>
+
+          <section class="card results" aria-labelledby="results-title">
+            <h2 id="results-title">Сколько взять</h2>
+            <dl class="stats">
+              <div>
+                <dt>Шарик теста</dt>
+                <dd>
+                  <span class="stat-num" id="stat-ball">262</span>
+                  <span class="stat-unit">г на пиццу</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Мука</dt>
+                <dd>
+                  <span class="stat-num" id="stat-flour">619</span>
+                  <span class="stat-unit">г на партию</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Вода</dt>
+                <dd>
+                  <span class="stat-num" id="stat-water">384</span>
+                  <span class="stat-unit">г на партию</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Гидратация</dt>
+                <dd>
+                  <span class="stat-num" id="stat-hydration">62</span>
+                  <span class="stat-unit">%</span>
+                </dd>
+              </div>
+            </dl>
+
+            <table class="ing">
+              <caption>Ингредиенты на всю партию</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Ингредиент</th>
+                  <th scope="col">Вес</th>
+                  <th scope="col"><abbr title="Процент пекаря, от веса муки">%</abbr></th>
+                </tr>
+              </thead>
+              <tbody id="ingredients"></tbody>
+            </table>
+
+            <ul class="pills" aria-live="polite">
+              <li class="pill pill-strong" id="pill-type">Обычное тесто</li>
+              <li class="pill" id="pill-ferment">Холодная ферментация 2–4 дня</li>
+              <li class="pill" id="pill-summary">4 шарика · 30 см · обычное</li>
+            </ul>
+
+            <div class="actions no-print">
+              <button type="button" id="copy">Скопировать</button>
+              <button type="button" id="print">Печать</button>
+            </div>
+            <pre id="recipe-text" class="visually-hidden" aria-hidden="true"></pre>
+          </section>
+
+          <section class="card steps-card span-2">
+            <h2>
+              <button type="button" class="steps-toggle" id="steps-toggle" aria-expanded="false" aria-controls="steps-wrap">
+                <span>
+                  <span class="steps-title" id="steps-title">Как замесить</span>
+                  <span class="steps-hint" id="steps-hint">9 шагов</span>
+                </span>
+                <span class="chevron" aria-hidden="true"></span>
+              </button>
+            </h2>
+            <div class="steps-wrap" id="steps-wrap" hidden>
+              <ol class="steps" id="steps"></ol>
+            </div>
+          </section>
+
+          <details class="method span-2 no-print">
+            <summary>Как считается</summary>
+            <p>Мука — база, её вес всегда 100%. Остальное берётся процентом от муки.</p>
+            <ul>
+              <li>Вода: 62% для обычного теста и 80% для безглютенового.</li>
+              <li>Дрожжи 0,4%, соль 2,5%, сахар 2%, оливковое масло 3,3%.</li>
+            </ul>
+            <p>Шарик обычного теста для пиццы 16 дюймов (40,6 см) и обычной толщины весит 480 г. Другой диаметр меняет вес по площади круга — то есть по квадрату диаметра. Тонкая корка легче базовой примерно на 15%, толстая тяжелее примерно на 30%.</p>
+            <p>Сантиметры делятся на 2,54 и дальше считаются как дюймы. Поэтому 40,6 см даёт те же граммы, что и 16 дюймов.</p>
+          </details>
+        </div>
+
+        <p class="footer no-print">Веса в граммах. Приложение можно поставить на экран телефона и открывать без интернета.</p>
+      </div>
+    </main>
+
+    <dialog id="install-dialog" aria-labelledby="install-title">
+      <h2 id="install-title">Установить на экран</h2>
+      <p id="install-ios" hidden>В Safari нажмите «Поделиться», затем «На экран Домой» и «Добавить».</p>
+      <p id="install-other">Откройте меню браузера и выберите «Установить приложение» или «Добавить на экран Домой».</p>
+      <button type="button" class="primary" id="install-close">Понятно</button>
+    </dialog>
+
+    <noscript>
+      <p class="wrap noscript">Для расчёта нужен JavaScript.</p>
+    </noscript>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
