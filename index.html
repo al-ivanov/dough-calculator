@@ -176,6 +176,38 @@
             </div>
           </section>
 
+          <section class="timers span-2 no-print" aria-label="Таймеры">
+            <div class="timers-grid">
+              <article class="card" aria-labelledby="proof-title">
+                <h2 id="proof-title">Предварительная ферментация</h2>
+                <p class="timer-note">Отдых перед холодильником. Когда время выйдет, придёт уведомление.</p>
+                <div class="chips" id="proof-hours" role="group" aria-label="Сколько часов расстаивать">
+                  <button type="button" data-hours="1" aria-pressed="false">1 ч</button>
+                  <button type="button" data-hours="2" aria-pressed="true">2 ч</button>
+                  <button type="button" data-hours="3" aria-pressed="false">3 ч</button>
+                  <button type="button" data-hours="4" aria-pressed="false">4 ч</button>
+                </div>
+                <p class="timer-clock" id="proof-clock" role="timer">02:00:00</p>
+                <p class="timer-status" id="proof-status" aria-live="polite"></p>
+                <div class="actions">
+                  <button type="button" id="proof-start">Старт</button>
+                  <button type="button" id="proof-reset">Сбросить</button>
+                </div>
+              </article>
+
+              <article class="card" aria-labelledby="ferment-title">
+                <h2 id="ferment-title">Ферментация</h2>
+                <p class="timer-note">Сколько тесто уже стоит в холодильнике. Пауза это время не прибавляет.</p>
+                <p class="timer-clock" id="ferment-clock" role="timer"><span class="timer-days" id="ferment-days">0 дней</span><span id="ferment-hms">00:00:00</span></p>
+                <div class="actions cols-3">
+                  <button type="button" id="ferment-start">Старт</button>
+                  <button type="button" id="ferment-pause">Пауза</button>
+                  <button type="button" id="ferment-reset">Сброс</button>
+                </div>
+              </article>
+            </div>
+          </section>
+
           <details class="method span-2 no-print">
             <summary>Как считается</summary>
             <p>Мука — база, её вес всегда 100%. Остальное берётся процентом от муки.</p>

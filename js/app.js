@@ -1,4 +1,15 @@
 import { calculate } from "./formula.js";
+import {
+  PROOF_HOURS,
+  fermentElapsed,
+  formatClock,
+  pauseFerment,
+  proofRemaining,
+  resetFerment,
+  sanitizeTimers,
+  splitElapsed,
+  startFerment,
+} from "./timers.js";
 
 const STORAGE_KEY = "testo-settings-v1";
 const DIAMETER_MIN = 25;
@@ -416,9 +427,189 @@ render();
 setupInstall();
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch((error) => {
-      console.error(error);
-    });
+  navigator.serviceWorker.register("./sw.js").catch((error) => {
+    console.error(error);
   });
 }
+
+const TIMERS_KEY = "testo-timers-v1";
+const proofClock = document.getElementById("proof-clock");
+const proofStatus = document.getElementById("proof-status");
+const fermentDays = document.getElementById("ferment-days");
+const fermentHms = document.getElementById("ferment-hms");
+const proofHourButtons = [...document.querySelectorAll("#proof-hours button")];
+const fermentStart = document.getElementById("ferment-start");
+const fermentPause = document.getElementById("ferment-pause");
+
+let timers = loadTimers();
+
+function loadTimers() {
+  try {
+    return sanitizeTimers(JSON.parse(localStorage.getItem(TIMERS_KEY) || "null"));
+  } catch {
+    return sanitizeTimers(null);
+  }
+}
+
+function saveTimers() {
+  try {
+    localStorage.setItem(TIMERS_KEY, JSON.stringify(timers));
+  } catch {
+    // The clocks still run for this visit if storage is blocked.
+  }
+}
+
+function renderTimers() {
+  const now = Date.now();
+  const remaining = proofRemaining(timers.proof.endsAt, now);
+  proofClock.classList.toggle("is-done", remaining === 0);
+  if (remaining == null) {
+    proofClock.textContent = formatClock(timers.proof.hours * 60 * 60 * 1000);
+    proofStatus.textContent = "";
+  } else if (remaining === 0) {
+    proofClock.textContent = "Пора в холодильник";
+    proofStatus.textContent = timers.proof.notify === "failed" ? "Уведомление не запланировано." : "";
+  } else {
+    proofClock.textContent = formatClock(remaining);
+    proofStatus.textContent =
+      timers.proof.notify === "scheduled"
+        ? "Уведомление придёт, когда время выйдет."
+        : timers.proof.notify === "failed"
+          ? "Уведомление не запланировано."
+          : "";
+  }
+
+  for (const button of proofHourButtons) {
+    button.setAttribute("aria-pressed", String(Number(button.dataset.hours) === timers.proof.hours));
+  }
+
+  const elapsed = splitElapsed(fermentElapsed(timers.ferment, now));
+  fermentDays.textContent = elapsed.daysLabel;
+  fermentHms.textContent = elapsed.clock;
+  fermentStart.disabled = timers.ferment.running;
+  fermentPause.disabled = !timers.ferment.running;
+}
+
+function urlBase64ToUint8Array(value) {
+  const padded = `${value}${"=".repeat((4 - (value.length % 4)) % 4)}`.replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(padded);
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+}
+
+function withTimeout(promise, milliseconds) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error("timeout")), milliseconds);
+    }),
+  ]);
+}
+
+async function currentSubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+  const registration = await withTimeout(navigator.serviceWorker.ready, 8000);
+  return registration.pushManager.getSubscription();
+}
+
+async function subscribeForPush() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    throw new Error("unsupported");
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new Error("permission");
+  const registration = await withTimeout(navigator.serviceWorker.ready, 8000);
+  const existing = await registration.pushManager.getSubscription();
+  if (existing) return existing;
+  const response = await fetch("./api/vapid-public-key");
+  if (!response.ok) throw new Error("key");
+  const { publicKey } = await response.json();
+  return registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
+}
+
+async function scheduleNotification(endsAt) {
+  const subscription = await subscribeForPush();
+  const response = await fetch("./api/schedule", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ subscription, endsAt }),
+  });
+  if (!response.ok) throw new Error("schedule");
+}
+
+async function cancelNotification() {
+  const subscription = await currentSubscription();
+  if (!subscription) return;
+  await fetch("./api/cancel", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ endpoint: subscription.endpoint }),
+  });
+}
+
+function setupTimers() {
+  for (const button of proofHourButtons) {
+    button.addEventListener("click", () => {
+      const hours = Number(button.dataset.hours);
+      if (!PROOF_HOURS.includes(hours)) return;
+      timers.proof.hours = hours;
+      saveTimers();
+      renderTimers();
+    });
+  }
+
+  document.getElementById("proof-start").addEventListener("click", () => {
+    timers.proof.endsAt = Date.now() + timers.proof.hours * 60 * 60 * 1000;
+    timers.proof.notify = "off";
+    saveTimers();
+    renderTimers();
+    const endsAt = timers.proof.endsAt;
+    scheduleNotification(endsAt)
+      .then(() => {
+        if (timers.proof.endsAt !== endsAt) return;
+        timers.proof.notify = "scheduled";
+        saveTimers();
+        renderTimers();
+      })
+      .catch(() => {
+        if (timers.proof.endsAt !== endsAt) return;
+        timers.proof.notify = "failed";
+        saveTimers();
+        renderTimers();
+      });
+  });
+
+  document.getElementById("proof-reset").addEventListener("click", () => {
+    timers.proof.endsAt = null;
+    timers.proof.notify = "off";
+    saveTimers();
+    renderTimers();
+    cancelNotification().catch(() => {
+      // The countdown is already cleared on this phone.
+    });
+  });
+
+  fermentStart.addEventListener("click", () => {
+    timers.ferment = startFerment(timers.ferment, Date.now());
+    saveTimers();
+    renderTimers();
+  });
+  fermentPause.addEventListener("click", () => {
+    timers.ferment = pauseFerment(timers.ferment, Date.now());
+    saveTimers();
+    renderTimers();
+  });
+  document.getElementById("ferment-reset").addEventListener("click", () => {
+    timers.ferment = resetFerment();
+    saveTimers();
+    renderTimers();
+  });
+
+  renderTimers();
+  window.setInterval(renderTimers, 1000);
+  document.addEventListener("visibilitychange", renderTimers);
+}
+
+setupTimers();

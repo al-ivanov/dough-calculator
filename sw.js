@@ -1,4 +1,4 @@
-const CACHE = "testo-v1";
+const CACHE = "testo-v2";
 
 const ASSETS = [
   "./",
@@ -6,6 +6,7 @@ const ASSETS = [
   "./css/app.css",
   "./js/app.js",
   "./js/formula.js",
+  "./js/timers.js",
   "./manifest.webmanifest",
   "./favicon.svg",
   "./icons/icon-192.png",
@@ -50,5 +51,40 @@ self.addEventListener("fetch", (event) => {
         if (cached) return cached;
         return caches.match("./index.html");
       }),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+  const title = payload.title || "Тесто";
+  const body = payload.body || "Расстойка закончилась. Тесто можно убирать в холодильник.";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      lang: "ru",
+      icon: "./icons/icon-192.png",
+      badge: "./icons/icon-192.png",
+      data: { url: "./" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "./", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (client.url.startsWith(self.location.origin) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
   );
 });

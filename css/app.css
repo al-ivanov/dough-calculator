@@ -636,9 +636,65 @@ legend {
     color: var(--on-accent);
   }
 
-  .actions button:last-child:hover {
+  .actions button:last-child:hover,
+  .actions.cols-3 button:nth-child(2):hover {
     border-color: var(--accent);
   }
+}
+
+.actions.cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.timers-grid {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 800px) {
+  .timers-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.timer-note {
+  margin: -6px 0 14px;
+  color: var(--muted);
+}
+
+.timer-clock {
+  margin: 18px 0 0;
+  font-family: var(--serif);
+  font-size: clamp(2.4rem, 7vw, 3.4rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.timer-days {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.42em;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.timer-clock.is-done {
+  font-family: var(--sans);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.timer-status {
+  min-height: 1.45em;
+  margin: 10px 0 0;
+  color: var(--muted);
 }
 
 .steps-card h2 {
