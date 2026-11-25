@@ -697,6 +697,26 @@ legend {
   color: var(--muted);
 }
 
+.wake-card {
+  margin-top: 16px;
+}
+
+.wake-card .switch {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.wake-card .switch + .switch {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.switch input:disabled + .switch-ui {
+  opacity: 0.45;
+}
+
 .steps-card h2 {
   margin: 0;
 }

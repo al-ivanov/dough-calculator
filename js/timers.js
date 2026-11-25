@@ -89,6 +89,8 @@ export function sanitizeTimers(raw) {
   const running = raw?.ferment?.running === true && Number.isFinite(raw?.ferment?.startedAt);
   return {
     secret: isDeviceSecret(raw?.secret) ? raw.secret : createDeviceSecret(),
+    keepAwake: raw?.keepAwake === true,
+    restoreWakeLock: raw?.restoreWakeLock === true,
     proof: { hours, endsAt, notify },
     ferment: {
       accumulatedMs,

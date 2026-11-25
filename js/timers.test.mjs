@@ -50,6 +50,13 @@ test("reset clears the stopwatch", () => {
   assert.deepEqual(resetFerment(), { accumulatedMs: 0, startedAt: null, running: false });
 });
 
+test("sanitize remembers whether the screen should stay on", () => {
+  assert.equal(sanitizeTimers(null).keepAwake, false);
+  assert.equal(sanitizeTimers(null).restoreWakeLock, false);
+  assert.equal(sanitizeTimers({ keepAwake: true, restoreWakeLock: true }).restoreWakeLock, true);
+  assert.equal(sanitizeTimers({ keepAwake: "yes" }).keepAwake, false);
+});
+
 test("sanitize keeps the same phone secret", () => {
   const timers = sanitizeTimers(null);
   assert.equal(isDeviceSecret(timers.secret), true);

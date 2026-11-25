@@ -612,4 +612,91 @@ function setupTimers() {
   document.addEventListener("visibilitychange", renderTimers);
 }
 
+function setupWakeLock() {
+  const input = document.getElementById("wake-lock");
+  const restoreInput = document.getElementById("wake-lock-restore");
+  const note = document.getElementById("wake-lock-note");
+  const idleNote = "Экран не погаснет, пока эта страница на виду.";
+  let sentinel = null;
+  let releasedByUser = false;
+
+  function rememberAwake(value) {
+    timers.keepAwake = value;
+    input.checked = value;
+    saveTimers();
+  }
+
+  async function acquire(fromUser) {
+    if (!timers.keepAwake || !("wakeLock" in navigator) || document.visibilityState !== "visible" || sentinel) return;
+    try {
+      sentinel = await navigator.wakeLock.request("screen");
+      sentinel.addEventListener("release", () => {
+        sentinel = null;
+        if (releasedByUser) return;
+        rememberAwake(false);
+      });
+      note.textContent = idleNote;
+    } catch {
+      sentinel = null;
+      if (!fromUser) return;
+      rememberAwake(false);
+      const installed = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+      const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      note.textContent =
+        installed && iphone
+          ? "На iPhone это работает в Safari. Приложение с экрана «Домой» экран пока не удерживает."
+          : "Браузер не дал держать экран включённым.";
+    }
+  }
+
+  async function release() {
+    const current = sentinel;
+    sentinel = null;
+    if (!current) return;
+    releasedByUser = true;
+    try {
+      await current.release();
+    } catch {
+      // The browser already dropped the lock.
+    }
+    releasedByUser = false;
+  }
+
+  if (!("wakeLock" in navigator)) {
+    input.disabled = true;
+    restoreInput.disabled = true;
+    note.textContent = "Этот браузер не умеет держать экран включённым.";
+    return;
+  }
+
+  input.checked = timers.keepAwake;
+  restoreInput.checked = timers.restoreWakeLock;
+  input.addEventListener("change", () => {
+    timers.keepAwake = input.checked;
+    saveTimers();
+    if (input.checked) {
+      acquire(true);
+      return;
+    }
+    note.textContent = idleNote;
+    release();
+  });
+  restoreInput.addEventListener("change", () => {
+    timers.restoreWakeLock = restoreInput.checked;
+    saveTimers();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !timers.restoreWakeLock) return;
+    timers.keepAwake = true;
+    acquire(false).then(() => {
+      rememberAwake(Boolean(sentinel));
+      if (sentinel) note.textContent = idleNote;
+    });
+  });
+
+  if (timers.keepAwake) acquire(false);
+}
+
 setupTimers();
+setupWakeLock();

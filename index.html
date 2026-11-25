@@ -206,6 +206,24 @@
                 </div>
               </article>
             </div>
+            <article class="card wake-card">
+              <label class="switch">
+                <span>
+                  <span class="switch-title">Не гасить экран</span>
+                  <span class="switch-note" id="wake-lock-note">Экран не погаснет, пока эта страница на виду.</span>
+                </span>
+                <input id="wake-lock" type="checkbox">
+                <span class="switch-ui" aria-hidden="true"></span>
+              </label>
+              <label class="switch">
+                <span>
+                  <span class="switch-title">Вернуть при возвращении</span>
+                  <span class="switch-note">Если уйти со страницы, экран снова не погаснет, когда она окажется на виду.</span>
+                </span>
+                <input id="wake-lock-restore" type="checkbox">
+                <span class="switch-ui" aria-hidden="true"></span>
+              </label>
+            </article>
           </section>
 
           <details class="method span-2 no-print">
