@@ -1,4 +1,4 @@
-const CACHE = "testo-v2";
+const CACHE = "testo-v3";
 
 const ASSETS = [
   "./",

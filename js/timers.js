@@ -2,9 +2,22 @@ export const PROOF_HOURS = [1, 2, 3, 4];
 
 export function defaultTimers() {
   return {
+    secret: null,
     proof: { hours: 2, endsAt: null, notify: "off" },
     ferment: { accumulatedMs: 0, startedAt: null, running: false },
   };
+}
+
+export function isDeviceSecret(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
+}
+
+export function createDeviceSecret() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 export function formatClock(milliseconds) {
@@ -75,6 +88,7 @@ export function sanitizeTimers(raw) {
       : 0;
   const running = raw?.ferment?.running === true && Number.isFinite(raw?.ferment?.startedAt);
   return {
+    secret: isDeviceSecret(raw?.secret) ? raw.secret : createDeviceSecret(),
     proof: { hours, endsAt, notify },
     ferment: {
       accumulatedMs,

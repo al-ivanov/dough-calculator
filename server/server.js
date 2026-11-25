@@ -3,7 +3,9 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import webpush from "web-push";
-import { cancelJob, dueJobs, upsertJob } from "./jobs.js";
+import { cancelJob, dueJobs, recordFailure, scheduleJob } from "./jobs.js";
+import { isDeviceSecret, isPushEndpoint, isSchedulableTime, isValidSubscription } from "./push.js";
+import { createRateLimit } from "./rate-limit.js";
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const staticRoot = path.resolve(serverDir, "..");
@@ -13,6 +15,17 @@ const host = process.env.HOST || "127.0.0.1";
 const contact = process.env.VAPID_CONTACT || "mailto:testo@localhost";
 const jobsFile = path.join(dataDir, "jobs.json");
 const vapidFile = path.join(dataDir, "vapid.json");
+
+const SECURITY_HEADERS = {
+  "content-security-policy":
+    "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; worker-src 'self'; manifest-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "no-referrer",
+};
+
+const allowSchedule = createRateLimit({ limit: 15, windowMs: 10 * 60 * 1000 });
+const allowCancel = createRateLimit({ limit: 15, windowMs: 10 * 60 * 1000 });
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -27,7 +40,8 @@ const MIME = {
 };
 
 function loadVapid() {
-  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  fs.chmodSync(dataDir, 0o700);
   if (fs.existsSync(vapidFile)) {
     return JSON.parse(fs.readFileSync(vapidFile, "utf8"));
   }
@@ -49,10 +63,22 @@ function loadJobs() {
 }
 
 function saveJobs(jobs) {
-  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  fs.chmodSync(dataDir, 0o700);
   const temporary = `${jobsFile}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(jobs, null, 2)}\n`);
+  fs.writeFileSync(temporary, `${JSON.stringify(jobs, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(temporary, jobsFile);
+  fs.chmodSync(jobsFile, 0o600);
+}
+
+function clientAddress(request) {
+  return request.socket.remoteAddress || "unknown";
+}
+
+function reply(response, status, body, headers = {}) {
+  response.writeHead(status, { ...SECURITY_HEADERS, ...headers });
+  if (body === undefined) response.end();
+  else response.end(body);
 }
 
 function readBody(request) {
@@ -80,26 +106,8 @@ function readBody(request) {
   });
 }
 
-function keyBytes(value) {
-  if (typeof value !== "string" || value.length === 0 || value.length > 200) return 0;
-  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
-  return Buffer.from(padded, "base64").length;
-}
-
-function isValidSubscription(subscription) {
-  return (
-    subscription &&
-    typeof subscription.endpoint === "string" &&
-    subscription.endpoint.startsWith("https://") &&
-    subscription.endpoint.length <= 2048 &&
-    keyBytes(subscription.keys?.p256dh) === 65 &&
-    keyBytes(subscription.keys?.auth) === 16
-  );
-}
-
 function sendJson(response, status, payload) {
-  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify(payload));
+  reply(response, status, JSON.stringify(payload), { "content-type": "application/json; charset=utf-8" });
 }
 
 async function dispatchDue() {
@@ -109,7 +117,13 @@ async function dispatchDue() {
   if (ready.length === 0) return;
 
   const sentEndpoints = new Set();
+  const failedEndpoints = new Set();
   for (const job of ready) {
+    const endpoint = job.subscription.endpoint;
+    if (!isPushEndpoint(endpoint)) {
+      sentEndpoints.add(endpoint);
+      continue;
+    }
     try {
       await webpush.sendNotification(
         job.subscription,
@@ -118,26 +132,29 @@ async function dispatchDue() {
           body: "Расстойка закончилась. Тесто можно убирать в холодильник.",
         }),
       );
-      sentEndpoints.add(job.subscription.endpoint);
+      sentEndpoints.add(endpoint);
     } catch (error) {
       const status = error.statusCode;
       if (status === 404 || status === 410) {
-        sentEndpoints.add(job.subscription.endpoint);
+        sentEndpoints.add(endpoint);
       } else {
+        failedEndpoints.add(endpoint);
         console.error("push failed", status || error.message);
       }
     }
   }
 
-  if (sentEndpoints.size === 0) return;
-  saveJobs(loadJobs().filter((job) => !sentEndpoints.has(job.subscription.endpoint)));
+  if (sentEndpoints.size === 0 && failedEndpoints.size === 0) return;
+  let remaining = loadJobs().filter((job) => !sentEndpoints.has(job.subscription.endpoint));
+  for (const endpoint of failedEndpoints) remaining = recordFailure(remaining, endpoint);
+  saveJobs(remaining);
 }
 
 function serveStatic(request, response) {
   const url = new URL(request.url, "http://127.0.0.1");
   let pathname = decodeURIComponent(url.pathname);
   if (pathname.includes("\0") || pathname === "/server" || pathname.startsWith("/server/")) {
-    response.writeHead(404).end("Not found");
+    reply(response, 404, "Not found", { "content-type": "text/plain; charset=utf-8" });
     return;
   }
   if (pathname.endsWith("/")) pathname += "index.html";
@@ -146,25 +163,24 @@ function serveStatic(request, response) {
   const insideSite = file === staticRoot || file.startsWith(`${staticRoot}${path.sep}`);
   const insideServer = file === serverResolved || file.startsWith(`${serverResolved}${path.sep}`);
   if (!insideSite || insideServer) {
-    response.writeHead(403).end("Forbidden");
+    reply(response, 403, "Forbidden", { "content-type": "text/plain; charset=utf-8" });
     return;
   }
 
   fs.readFile(file, (error, data) => {
     if (error) {
-      response.writeHead(404).end("Not found");
+      reply(response, 404, "Not found", { "content-type": "text/plain; charset=utf-8" });
       return;
     }
-    if (request.method === "HEAD") {
-      response.writeHead(200, { "content-type": MIME[path.extname(file)] || "application/octet-stream" });
-      response.end();
-      return;
-    }
-    response.writeHead(200, {
+    const headers = {
       "content-type": MIME[path.extname(file)] || "application/octet-stream",
       "cache-control": "no-cache",
-    });
-    response.end(data);
+    };
+    if (request.method === "HEAD") {
+      reply(response, 200, undefined, headers);
+      return;
+    }
+    reply(response, 200, data, headers);
   });
 }
 
@@ -177,35 +193,50 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === "/api/schedule" && request.method === "POST") {
+    if (!allowSchedule(clientAddress(request))) {
+      reply(response, 429, "Too many requests", { "content-type": "text/plain; charset=utf-8" });
+      return;
+    }
     try {
       const body = await readBody(request);
       const endsAt = Number(body?.endsAt);
-      const latest = Date.now() + 48 * 60 * 60 * 1000;
-      if (!isValidSubscription(body?.subscription) || !Number.isFinite(endsAt) || endsAt > latest) {
-        response.writeHead(400).end("Bad request");
+      if (!isValidSubscription(body?.subscription) || !isDeviceSecret(body?.secret) || !isSchedulableTime(endsAt, Date.now())) {
+        reply(response, 400, "Bad request", { "content-type": "text/plain; charset=utf-8" });
         return;
       }
-      saveJobs(upsertJob(loadJobs(), body.subscription, endsAt));
-      response.writeHead(204).end();
+      const result = scheduleJob(loadJobs(), body.subscription, endsAt, body.secret);
+      if (!result.ok) {
+        const status = result.reason === "full" ? 429 : 403;
+        reply(response, status, result.reason === "full" ? "Too many requests" : "Forbidden", {
+          "content-type": "text/plain; charset=utf-8",
+        });
+        return;
+      }
+      saveJobs(result.jobs);
+      reply(response, 204);
       dispatchDue().catch((error) => console.error(error));
     } catch {
-      response.writeHead(400).end("Bad request");
+      reply(response, 400, "Bad request", { "content-type": "text/plain; charset=utf-8" });
     }
     return;
   }
 
   if (url.pathname === "/api/cancel" && request.method === "POST") {
+    if (!allowCancel(clientAddress(request))) {
+      reply(response, 429, "Too many requests", { "content-type": "text/plain; charset=utf-8" });
+      return;
+    }
     try {
       const body = await readBody(request);
       const endpoint = body?.endpoint || body?.subscription?.endpoint;
-      if (typeof endpoint !== "string") {
-        response.writeHead(400).end("Bad request");
+      if (!isPushEndpoint(endpoint) || !isDeviceSecret(body?.secret)) {
+        reply(response, 400, "Bad request", { "content-type": "text/plain; charset=utf-8" });
         return;
       }
-      saveJobs(cancelJob(loadJobs(), endpoint));
-      response.writeHead(204).end();
+      saveJobs(cancelJob(loadJobs(), endpoint, body.secret));
+      reply(response, 204);
     } catch {
-      response.writeHead(400).end("Bad request");
+      reply(response, 400, "Bad request", { "content-type": "text/plain; charset=utf-8" });
     }
     return;
   }
@@ -215,7 +246,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  response.writeHead(405).end("Method not allowed");
+  reply(response, 405, "Method not allowed", { "content-type": "text/plain; charset=utf-8" });
 });
 
 setInterval(() => {

@@ -534,7 +534,7 @@ async function scheduleNotification(endsAt) {
   const response = await fetch("./api/schedule", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ subscription, endsAt }),
+    body: JSON.stringify({ subscription, endsAt, secret: timers.secret }),
   });
   if (!response.ok) throw new Error("schedule");
 }
@@ -545,7 +545,7 @@ async function cancelNotification() {
   await fetch("./api/cancel", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ endpoint: subscription.endpoint }),
+    body: JSON.stringify({ endpoint: subscription.endpoint, secret: timers.secret }),
   });
 }
 

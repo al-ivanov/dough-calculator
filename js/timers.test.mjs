@@ -8,6 +8,7 @@ import {
   splitElapsed,
   proofRemaining,
   resetFerment,
+  isDeviceSecret,
   sanitizeTimers,
   startFerment,
 } from "./timers.js";
@@ -47,6 +48,14 @@ test("ferment pauses without adding closed time", () => {
 
 test("reset clears the stopwatch", () => {
   assert.deepEqual(resetFerment(), { accumulatedMs: 0, startedAt: null, running: false });
+});
+
+test("sanitize keeps the same phone secret", () => {
+  const timers = sanitizeTimers(null);
+  assert.equal(isDeviceSecret(timers.secret), true);
+  assert.equal(sanitizeTimers(timers).secret, timers.secret);
+  const stored = "c".repeat(43);
+  assert.equal(sanitizeTimers({ secret: stored }).secret, stored);
 });
 
 test("sanitize drops a pause that was stored as running", () => {
